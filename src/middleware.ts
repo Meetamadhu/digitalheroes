@@ -1,76 +1,90 @@
+import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 import { getSupabaseEnv } from "@/lib/supabase/config";
-import { updateSession } from "@/lib/supabase/middleware";
 
 const protectedPrefixes = ["/dashboard", "/subscribe", "/subscribe/checkout-success"];
 const adminPrefix = "/admin";
 
+function shouldSkipMiddleware(pathname: string): boolean {
+  return (
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/api/stripe/webhook") ||
+    pathname === "/favicon.ico" ||
+    /\.[a-z0-9]+$/i.test(pathname)
+  );
+}
+
+function needsAuth(pathname: string): boolean {
+  return (
+    protectedPrefixes.some((p) => pathname.startsWith(p)) ||
+    pathname.startsWith(adminPrefix)
+  );
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (
-    pathname.startsWith("/_next") ||
-    pathname.startsWith("/api/stripe/webhook") ||
-    pathname.includes(".")
-  ) {
+  if (shouldSkipMiddleware(pathname)) {
     return NextResponse.next();
   }
 
-  const env = getSupabaseEnv();
-  const response = await updateSession(request);
+  try {
+    const env = getSupabaseEnv();
 
-  if (!env) {
-    const needsAuth =
-      protectedPrefixes.some((p) => pathname.startsWith(p)) ||
-      pathname.startsWith(adminPrefix);
-    if (needsAuth && pathname !== "/setup") {
+    if (!env) {
+      if (needsAuth(pathname) && pathname !== "/setup") {
+        const url = request.nextUrl.clone();
+        url.pathname = "/setup";
+        url.searchParams.set("next", pathname);
+        return NextResponse.redirect(url);
+      }
+      return NextResponse.next();
+    }
+
+    let supabaseResponse = NextResponse.next({ request });
+
+    const supabase = createServerClient(env.url, env.anonKey, {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) =>
+            supabaseResponse.cookies.set(name, value, options),
+          );
+        },
+      },
+    });
+
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError) {
+      // Stale or invalid session cookie — continue as logged out
+      if (needsAuth(pathname) && pathname !== "/login" && pathname !== "/signup") {
+        const url = request.nextUrl.clone();
+        url.pathname = "/login";
+        url.searchParams.set("next", pathname);
+        return NextResponse.redirect(url);
+      }
+      return supabaseResponse;
+    }
+
+    if (needsAuth(pathname) && !user && pathname !== "/login" && pathname !== "/signup") {
       const url = request.nextUrl.clone();
-      url.pathname = "/setup";
+      url.pathname = "/login";
       url.searchParams.set("next", pathname);
       return NextResponse.redirect(url);
     }
-    return response;
+
+    // Admin role is enforced in src/app/admin/layout.tsx (Node runtime)
+    return supabaseResponse;
+  } catch {
+    // Never fail the whole site if middleware throws (Edge + Supabase hiccups)
+    return NextResponse.next();
   }
-
-  const { createServerClient } = await import("@supabase/ssr");
-  const supabase = createServerClient(env.url, env.anonKey, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll();
-      },
-      setAll() {},
-    },
-  });
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const needsAuth =
-    protectedPrefixes.some((p) => pathname.startsWith(p)) ||
-    pathname.startsWith(adminPrefix);
-
-  if (needsAuth && !user && pathname !== "/login" && pathname !== "/signup") {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.searchParams.set("next", pathname);
-    return NextResponse.redirect(url);
-  }
-
-  if (pathname.startsWith(adminPrefix) && user) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .maybeSingle();
-    if (profile?.role !== "admin") {
-      const url = request.nextUrl.clone();
-      url.pathname = "/dashboard";
-      return NextResponse.redirect(url);
-    }
-  }
-
-  return response;
 }
 
 export const config = {
