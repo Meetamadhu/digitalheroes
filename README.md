@@ -1,36 +1,46 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# digital.HEROES — Level 1 PRD implementation
 
-## Getting Started
+Next.js (App Router) + Supabase + Stripe subscription platform for golf scores, charity giving, and monthly prize draws.
 
-First, run the development server:
+## Setup
+
+1. Create a **new Supabase project** and run [`supabase/schema.sql`](./supabase/schema.sql) in the SQL editor.
+2. Copy [`.env.example`](./.env.example) to `.env.local` and fill in keys.
+3. In Supabase Auth, enable Email provider.
+4. Create Stripe products/prices for monthly and yearly plans; add price IDs to env.
+5. For Stripe webhooks locally: `stripe listen --forward-to localhost:3000/api/stripe/webhook`
 
 ```bash
+cd web
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Test accounts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+After signup, promote an admin in Supabase SQL:
 
-## Learn More
+```sql
+update public.profiles set role = 'admin' where email = 'you@example.com';
+```
 
-To learn more about Next.js, take a look at the following resources:
+Without Stripe configured, the subscribe page uses **demo activation** (development only) via `/api/dev/activate-subscription`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Deploy (PRD)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- New **Vercel** project pointing at `web/`
+- Same Supabase project env vars in Vercel
+- Stripe webhook URL: `https://your-domain/api/stripe/webhook`
 
-## Deploy on Vercel
+## Assumptions
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+See [ASSUMPTIONS.md](./ASSUMPTIONS.md) for draw mechanics and pool math.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Structure
+
+- `src/app` — routes (public, dashboard, admin)
+- `src/app/actions` — server actions
+- `src/lib` — draw engine, prize pool, auth helpers
+- `supabase/schema.sql` — database + RLS
