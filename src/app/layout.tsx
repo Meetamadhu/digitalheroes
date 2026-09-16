@@ -16,6 +16,9 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+/** Auth and Supabase-backed pages; avoid static prerender on Vercel without env at build time. */
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "digital.HEROES — Play. Give. Win.",
   description:
