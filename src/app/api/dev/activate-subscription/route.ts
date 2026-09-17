@@ -1,10 +1,20 @@
 import { NextResponse } from "next/server";
+import { isStripeCheckoutReady } from "@/lib/stripe";
 import { createClient } from "@/lib/supabase/server";
 
-/** Local/demo helper when Stripe keys are not set. Disabled in production. */
+/**
+ * Activates subscription in DB when Stripe Checkout is not configured.
+ * Allowed on production only while Stripe is not fully set up (assignment / testing).
+ */
 export async function POST(request: Request) {
-  if (process.env.NODE_ENV === "production" && process.env.ALLOW_DEMO_SUBSCRIBE !== "true") {
-    return NextResponse.json({ error: "Not available" }, { status: 403 });
+  const stripeReady = isStripeCheckoutReady();
+  const demoForced = process.env.ALLOW_DEMO_SUBSCRIBE === "true";
+
+  if (process.env.NODE_ENV === "production" && stripeReady && !demoForced) {
+    return NextResponse.json(
+      { error: "Use Stripe Checkout — demo activation is disabled when Stripe is configured." },
+      { status: 403 },
+    );
   }
 
   const { plan } = await request.json();

@@ -33,7 +33,12 @@ export function SubscribeButton({ plan, label }: { plan: Plan; label: string }) 
           window.location.href = "/dashboard";
           return;
         }
-        setError(demoData.error ?? "Demo subscribe failed.");
+        setError(
+          demoData.error ??
+            (demo.status === 403
+              ? "Demo subscribe is disabled. Add Stripe keys on Vercel or set ALLOW_DEMO_SUBSCRIBE=true."
+              : "Demo subscribe failed."),
+        );
         return;
       }
       setError(data.error ?? "Checkout failed.");

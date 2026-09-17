@@ -52,7 +52,8 @@ export default async function SubscribePage() {
         </div>
       </div>
       <p className="mt-8 text-xs text-zinc-600">
-        Without Stripe keys, checkout falls back to demo activation for local testing only.
+        Without Stripe price IDs on the server, buttons use demo activation (sets your profile to
+        active). Add Stripe env vars on Vercel for real payments.
       </p>
     </div>
   );
