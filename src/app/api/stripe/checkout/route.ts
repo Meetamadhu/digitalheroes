@@ -50,7 +50,11 @@ export async function POST(request: Request) {
     await supabase.from("profiles").update({ stripe_customer_id: customerId }).eq("id", user.id);
   }
 
-  const origin = request.headers.get("origin") ?? process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const origin =
+    request.headers.get("origin") ??
+    process.env.APP_URL ??
+    process.env.NEXT_PUBLIC_APP_URL ??
+    "http://localhost:3000";
 
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",

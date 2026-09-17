@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { ensureProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { MIN_CHARITY_PERCENT } from "@/lib/constants";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
@@ -32,6 +33,8 @@ export async function signUp(formData: FormData): Promise<void> {
   if (error) redirect(`/signup?error=${encodeURIComponent(error.message)}`);
   if (!data.user) redirect("/signup?error=signup_failed");
 
+  await ensureProfile(data.user.id, data.user.email);
+
   const { error: profileError } = await supabase
     .from("profiles")
     .update({
@@ -54,9 +57,14 @@ export async function signIn(formData: FormData): Promise<void> {
   const next = String(formData.get("next") ?? "/dashboard");
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) redirect(`/login?error=${encodeURIComponent(error.message)}`);
 
+  if (data.user) {
+    await ensureProfile(data.user.id, data.user.email);
+  }
+
+  revalidatePath("/", "layout");
   redirect(next.startsWith("/") ? next : "/dashboard");
 }
 

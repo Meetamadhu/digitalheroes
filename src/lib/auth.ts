@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import type { Profile } from "@/types/database";
 
 export async function getSessionUser() {
@@ -16,11 +16,37 @@ export async function getProfile(userId: string): Promise<Profile | null> {
   return data as Profile | null;
 }
 
+/** Create profile row if auth user exists but trigger did not run (common after late schema migration). */
+export async function ensureProfile(userId: string, email?: string | null): Promise<Profile | null> {
+  const existing = await getProfile(userId);
+  if (existing) return existing;
+
+  const row = { id: userId, email: email ?? null };
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+
+  if (serviceKey) {
+    const admin = await createServiceClient();
+    const { error } = await admin.from("profiles").upsert(row);
+    if (error && error.code !== "23505") return null;
+  } else {
+    const supabase = await createClient();
+    const { error } = await supabase.from("profiles").insert(row);
+    if (error && error.code !== "23505") return null;
+  }
+
+  return getProfile(userId);
+}
+
 export async function requireUser() {
   const user = await getSessionUser();
-  if (!user) redirect("/login");
-  const profile = await getProfile(user.id);
-  if (!profile) redirect("/login");
+  if (!user) redirect("/login?error=session");
+
+  let profile = await getProfile(user.id);
+  if (!profile) {
+    profile = await ensureProfile(user.id, user.email);
+  }
+  if (!profile) redirect("/login?error=profile");
+
   return { user, profile };
 }
 

@@ -146,6 +146,8 @@ create policy "settings_admin_write" on public.platform_settings for all using (
 
 create policy "profiles_read_own_or_admin" on public.profiles for select
   using (auth.uid() = id or public.is_admin());
+create policy "profiles_insert_own" on public.profiles for insert
+  with check (auth.uid() = id);
 create policy "profiles_update_own_or_admin" on public.profiles for update
   using (auth.uid() = id or public.is_admin());
 
